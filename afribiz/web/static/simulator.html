@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AfriBiz Simulator</title>
+<style>
+  :root {
+    --bg: #ece5dd; --chat: #efeae2; --me: #d9fdd3; --bot: #ffffff; --ink: #111b21; --muted: #667781;
+    --head: #075e54; --head-ink: #ffffff; --btn: #ffffff; --btn-ink: #027eb5; --line: #d1d7db;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b141a; --chat: #0b141a; --me: #005c4b; --bot: #202c33; --ink: #e9edef; --muted: #8696a0;
+      --head: #202c33; --head-ink: #e9edef; --btn: #202c33; --btn-ink: #53bdeb; --line: #2a3942;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b141a; --chat: #0b141a; --me: #005c4b; --bot: #202c33; --ink: #e9edef; --muted: #8696a0;
+    --head: #202c33; --head-ink: #e9edef; --btn: #202c33; --btn-ink: #53bdeb; --line: #2a3942;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { max-width: 560px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; background: var(--chat); }
+  header { background: var(--head); color: var(--head-ink); padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  header strong { font-size: 1.05rem; flex: 1; min-width: 120px; }
+  header input { width: 170px; max-width: 100%; border-radius: 8px; border: 0; padding: 6px 8px; font: inherit; background: rgba(255,255,255,.15); color: var(--head-ink); }
+  header label { font-size: .8rem; opacity: .85; }
+  #log { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .msg { max-width: 85%; padding: 7px 10px; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 1px 0.5px rgba(0,0,0,.13); }
+  .me { align-self: flex-end; background: var(--me); border-top-right-radius: 2px; }
+  .bot { align-self: flex-start; background: var(--bot); border-top-left-radius: 2px; }
+  .btns { align-self: flex-start; display: flex; gap: 6px; flex-wrap: wrap; max-width: 85%; }
+  .btns button { background: var(--btn); color: var(--btn-ink); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  .doc { display: inline-block; margin-top: 4px; font-weight: 600; }
+  a { color: var(--btn-ink); }
+  form { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--chat); }
+  form textarea { flex: 1; resize: none; border-radius: 20px; border: 1px solid var(--line); padding: 9px 14px; font: inherit; background: var(--bot); color: var(--ink); height: 42px; }
+  form button { border: 0; border-radius: 50%; width: 42px; height: 42px; background: var(--head); color: var(--head-ink); font-size: 18px; cursor: pointer; }
+  .hint { font-size: .8rem; color: var(--muted); text-align: center; padding: 6px 16px 0; }
+  .typing { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <strong>AfriBiz assistant</strong>
+    <label>Your number <input id="phone" value="254712345678" inputmode="tel" aria-label="Phone number (country code first)"></label>
+  </header>
+  <p class="hint">Simulates WhatsApp. The country code sets your currency: 254 Kenya, 234 Nigeria, 233 Ghana, 256 Uganda, 255 Tanzania…</p>
+  <div id="log" aria-live="polite"></div>
+  <form id="f">
+    <textarea id="t" placeholder="Type a message, e.g. sold 3 bread @ 60" aria-label="Message"></textarea>
+    <button aria-label="Send">➤</button>
+  </form>
+</div>
+<script>
+const log = document.getElementById('log');
+const phone = document.getElementById('phone');
+const box = document.getElementById('t');
+try { const saved = localStorage.getItem('afribiz-phone'); if (saved) phone.value = saved; } catch (e) {}
+phone.addEventListener('change', () => { try { localStorage.setItem('afribiz-phone', phone.value); } catch (e) {} });
+
+function esc(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(s) {
+  let h = esc(s);
+  h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<b>$2</b>');
+  h = h.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<i>$2</i>');
+  return h;
+}
+function bubble(text, who) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.innerHTML = fmt(text);
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+async function send(text) {
+  if (!text.trim()) return;
+  bubble(text, 'me');
+  const wait = bubble('typing…', 'bot typing');
+  try {
+    const r = await fetch('/api/simulate', { method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ phone: phone.value, text }) });
+    const data = await r.json();
+    wait.remove();
+    if (!r.ok) { bubble('Error: ' + (data.detail || r.status), 'bot'); return; }
+    for (const rep of data.replies) {
+      const b = bubble(rep.text || '', 'bot');
+      if (rep.document) {
+        const a = document.createElement('a');
+        a.className = 'doc'; a.href = rep.document.url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = '📄 ' + rep.document.filename;
+        b.appendChild(document.createElement('br')); b.appendChild(a);
+      }
+      if (rep.buttons && rep.buttons.length) {
+        const row = document.createElement('div'); row.className = 'btns';
+        for (const btn of rep.buttons) {
+          const el = document.createElement('button'); el.type = 'button'; el.textContent = btn.title;
+          el.onclick = () => send(btn.id); row.appendChild(el);
+        }
+        log.appendChild(row);
+      }
+    }
+    log.scrollTop = log.scrollHeight;
+  } catch (e) { wait.remove(); bubble('Network error', 'bot'); }
+}
+document.getElementById('f').addEventListener('submit', e => { e.preventDefault(); const v = box.value; box.value = ''; send(v); });
+box.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('f').requestSubmit(); } });
+</script>
+</body>
+</html>

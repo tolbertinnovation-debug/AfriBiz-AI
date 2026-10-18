@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "afribiz-ai"
+version = "0.1.0"
+description = "A WhatsApp, voice and USSD business assistant for small and informal businesses in Africa: records, stock, invoices, debt chasing, mobile-money credit profiles and bite-sized business lessons."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=1.0"]
+pdf = ["reportlab>=4.0"]
+all = ["anthropic>=1.0", "reportlab>=4.0"]
+dev = ["pytest>=8", "ruff>=0.4", "anthropic>=1.0", "reportlab>=4.0"]
+
+[project.scripts]
+afribiz = "afribiz.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["afribiz*"]
+
+[tool.setuptools.package-data]
+afribiz = ["web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares request parameters with calls in defaults.
+extend-immutable-calls = ["fastapi.File", "fastapi.Form", "fastapi.Query"]
